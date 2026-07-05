@@ -312,7 +312,7 @@
         const tgUser = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
 
         // Ссылка на твою обновленную Google Таблицу
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzO3_F8V36WRD638GUfMAtIkriSnU-fiK4OYszPcEUdjmCCKrIzlvSnz4d1zApKKKMY/exec";
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz8KoXQOsYN4RXlN0gcipSkPFcdKhimlwFvx_HV1iAKT0Z3GGyZ8c5OgrFoaPZ5ORXn/exec";
 
         const BACKUP_PRODUCTS = [
             {
@@ -443,20 +443,40 @@
             });
         }
 
-        async function loadProducts() {
+        async function loadProducts(attempt = 1) {
             if (!GOOGLE_SCRIPT_URL) {
-                renderCatalog(BACKUP_PRODUCTS);
+                showLoadError();
                 return;
             }
             try {
                 const response = await fetch(GOOGLE_SCRIPT_URL);
                 if (!response.ok) throw new Error();
                 const data = await response.json();
-                if (data && data.length > 0) renderCatalog(data);
-                else renderCatalog(BACKUP_PRODUCTS);
+                if (data && data.length > 0) {
+                    renderCatalog(data);
+                } else {
+                    showLoadError();
+                }
             } catch (error) {
-                renderCatalog(BACKUP_PRODUCTS);
+                if (attempt < 3) {
+                    setTimeout(() => loadProducts(attempt + 1), 1500);
+                } else {
+                    showLoadError();
+                }
             }
+        }
+
+        function showLoadError() {
+            document.getElementById('loading-status').innerHTML = `
+                Не удалось загрузить каталог.<br>
+                <button class="btn-order" style="margin-top: 10px;" onclick="retryLoad()">Повторить</button>
+            `;
+            document.getElementById('loading-status').style.display = 'block';
+        }
+
+        function retryLoad() {
+            document.getElementById('loading-status').innerHTML = 'Загрузка витрины...';
+            loadProducts();
         }
 
         async function loadPromoCodes() {
