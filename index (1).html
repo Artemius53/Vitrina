@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini App Shop</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #ffffff);
+            --text-color: var(--tg-theme-text-color, #000000);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f7);
+            --hint-color: var(--tg-theme-hint-color, #8e8e93);
+            --button-color: var(--tg-theme-button-color, #000000);
+            --button-text: var(--tg-theme-button-text-color, #ffffff);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        header { margin-bottom: 24px; }
+        h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px 0; letter-spacing: -0.5px; }
+        .subtitle { font-size: 13px; color: var(--hint-color); margin: 0; }
+
+        .catalog { display: flex; flex-direction: column; gap: 24px; }
+        .product-card { background: var(--bg-color); border-bottom: 1px solid var(--secondary-bg); padding-bottom: 24px; }
+        
+        .product-img {
+            width: 100%;
+            aspect-ratio: 1;
+            background-color: var(--secondary-bg);
+            border-radius: 12px;
+            object-fit: cover;
+            margin-bottom: 12px;
+        }
+
+        .product-title { font-size: 18px; font-weight: 600; margin: 0 0 6px 0; }
+        .product-desc { font-size: 14px; color: var(--hint-color); line-height: 1.4; margin: 0 0 12px 0; }
+
+        .product-meta { display: flex; gap: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--hint-color); margin-bottom: 12px; }
+        .meta-value { color: var(--text-color); font-weight: 600; }
+
+        .product-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+        .product-price { font-size: 18px; font-weight: 700; }
+        
+        .btn-order {
+            padding: 10px 20px; border: none; border-radius: 8px;
+            background-color: var(--button-color); color: var(--button-text);
+            font-weight: 500; font-size: 14px; cursor: pointer;
+        }
+
+        #order-screen { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-color); z-index: 10; padding: 16px; overflow-y: auto; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--hint-color); }
+        input, textarea, select { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--secondary-bg); border-radius: 8px; background: var(--secondary-bg); color: var(--text-color); font-size: 15px; font-family: inherit; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--hint-color); }
+        .order-summary { font-size: 14px; margin-bottom: 20px; padding: 12px; background: var(--secondary-bg); border-radius: 8px; white-space: pre-line; }
+        
+        .loading { text-align: center; color: var(--hint-color); padding: 40px 0; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div id="catalog-screen">
+        <header>
+            <h1>Limited Edition</h1>
+            <p class="subtitle">Каталог авторских изделий</p>
+        </header>
+        
+        <div id="loading-status" class="loading">Загрузка витрины...</div>
+        <div class="catalog" id="catalog-container"></div>
+    </div>
+
+    <div id="order-screen">
+        <h1 id="screen-title">Оформление заказа</h1>
+        <p class="subtitle" id="screen-subtitle" style="margin-bottom: 20px;">Заполните данные для доставки</p>
+        
+        <div id="form-fields">
+            <div class="order-summary" id="order-info"></div>
+            <div class="form-group">
+                <label for="fio">ФИО получателя</label>
+                <input type="text" id="fio" placeholder="Иванов Иван Иванович">
+            </div>
+            <div class="form-group">
+                <label for="phone">Телефон для связи</label>
+                <input type="tel" id="phone" placeholder="+7 (999) 999-99-99">
+            </div>
+            <div class="form-group">
+                <label for="delivery">Способ доставки</label>
+                <select id="delivery">
+                    <option value="СДЭК (склад/склад)">СДЭК (склад/склад)</option>
+                    <option value="Почта России">Почта России</option>
+                    <option value="Яндекс Доставка">Яндекс Доставка</option>
+                    <option value="Ozon Доставка">Ozon Доставка</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="address">Адрес доставки / Индекс / Номер ПВЗ</label>
+                <textarea id="address" rows="3" placeholder="Город, адрес пункта выдачи или индекс..."></textarea>
+            </div>
+        </div>
+
+        <div id="payment-fields" style="display: none;">
+            <div class="order-summary" style="background: var(--secondary-bg); border: 1px solid var(--hint-color); color: var(--text-color); text-align: center; font-size: 15px;">
+                <strong>Перевод по СБП</strong><br>
+                Переведите сумму заказа через приложение вашего банка.
+            </div>
+            
+            <div class="order-summary" id="payment-details" style="font-size: 16px; line-height: 1.8; text-align: center;">
+                💰 Сумма к переводу: <span id="payment-amount" style="font-weight: 700; color: #34c759; font-size: 18px;">0 ₽</span><br>
+                📱 Номер телефона: <span style="font-weight: 600; letter-spacing: 0.5px;">8-921-204-11-26</span><br>
+                🏦 Банк получателя: <span style="font-weight: 600;">Т-Банк</span><br>
+                👤 Получатель: <span style="font-weight: 600;">Артемий Михайлович Ц.</span>
+            </div>
+            
+            <p class="subtitle" style="text-align: center; margin-top: 16px;">
+                После перевода нажмите кнопку «Я перевел». Уведомление мгновенно отправится мастеру, а приложение закроется.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Ссылка на твою обновленную Google Таблицу
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyQ1SB93-4PnkISgZCKlj4tKnTPQt2NqVr_YcDDCfifBo2h2AZls62gopoXFiseyjxzog/exec"; 
+
+        const BACKUP_PRODUCTS = [
+            {
+                id: "manual-1",
+                title: "Goblins: Pirate",
+                desc: "Лимитированная серия lanyard beads. Ручной финиш, оксидирование.",
+                image: "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=500",
+                edition: "20 шт.",
+                stock: "5 шт.",
+                price: 4500
+            }
+        ];
+
+        let currentOrder = null;
+        let isPaymentStage = false;
+
+        function renderCatalog(products) {
+            const container = document.getElementById('catalog-container');
+            container.innerHTML = "";
+            document.getElementById('loading-status').style.display = 'none';
+
+            products.forEach(prod => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <img src="${prod.image || 'https://via.placeholder.com/500?text=No+Photo'}" class="product-img" alt="${prod.title}">
+                    <h2 class="product-title">${prod.title}</h2>
+                    <p class="product-desc">${prod.desc}</p>
+                    <div class="product-meta">
+                        <div>Тираж: <span class="meta-value">${prod.edition}</span></div>
+                        <div>Осталось: <span class="meta-value">${prod.stock}</span></div>
+                    </div>
+                    <div class="product-footer">
+                        <div class="product-price">${Number(prod.price).toLocaleString()} ₽</div>
+                        <button class="btn-order" onclick="openOrderFlow('${prod.title.replace(/'/g, "\\'")}', ${prod.price})">Заказать</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function loadProducts() {
+            if (!GOOGLE_SCRIPT_URL) {
+                renderCatalog(BACKUP_PRODUCTS);
+                return;
+            }
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                if (data && data.length > 0) renderCatalog(data);
+                else renderCatalog(BACKUP_PRODUCTS);
+            } catch (error) {
+                renderCatalog(BACKUP_PRODUCTS);
+            }
+        }
+
+        function openOrderFlow(productName, price) {
+            currentOrder = { productName, price };
+            isPaymentStage = false;
+            document.getElementById('catalog-screen').style.display = 'none';
+            document.getElementById('order-screen').style.display = 'block';
+            document.getElementById('form-fields').style.display = 'block';
+            document.getElementById('payment-fields').style.display = 'none';
+            document.getElementById('screen-title').innerText = 'Оформление заказа';
+            document.getElementById('screen-subtitle').innerText = 'Заполните данные для доставки';
+            document.getElementById('order-info').innerText = `Вы заказываете: ${productName}\nСтоимость: ${price} ₽`;
+            tg.MainButton.text = `Подтвердить и оплатить ${price} ₽`;
+            tg.MainButton.show();
+            tg.BackButton.show();
+        }
+
+        tg.BackButton.onClick(function() {
+            if (isPaymentStage) {
+                document.getElementById('form-fields').style.display = 'block';
+                document.getElementById('payment-fields').style.display = 'none';
+                document.getElementById('screen-title').innerText = 'Оформление заказа';
+                document.getElementById('screen-subtitle').innerText = 'Заполните данные для доставки';
+                isPaymentStage = false;
+                tg.MainButton.text = `Подтвердить и оплатить ${currentOrder.price} ₽`;
+            } else {
+                document.getElementById('catalog-screen').style.display = 'block';
+                document.getElementById('order-screen').style.display = 'none';
+                tg.MainButton.hide();
+                tg.BackButton.hide();
+            }
+        });
+
+        tg.MainButton.onClick(async function() {
+            const fio = document.getElementById('fio').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const delivery = document.getElementById('delivery').value;
+            const address = document.getElementById('address').value.trim();
+
+            if (!fio || !phone || !address) {
+                tg.showAlert('Пожалуйста, заполните ФИО, телефон и адрес доставки.');
+                return;
+            }
+
+            if (!isPaymentStage) {
+                document.getElementById('form-fields').style.display = 'none';
+                document.getElementById('payment-fields').style.display = 'block';
+                document.getElementById('screen-title').innerText = 'Оплата заказа';
+                document.getElementById('screen-subtitle').innerText = 'Перевод по СБП';
+                document.getElementById('payment-amount').innerText = `${currentOrder.price} ₽`;
+                isPaymentStage = true;
+                tg.MainButton.text = "Я перевел, отправить заказ";
+            } else {
+                tg.MainButton.disable();
+                
+                const orderData = {
+                    product: currentOrder.productName,
+                    price: currentOrder.price,
+                    delivery_method: delivery,
+                    customer: { fio, phone, address }
+                };
+
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        cache: 'no-cache',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(orderData)
+                    });
+
+                    tg.showAlert("Заказ успешно отправлен! Ожидайте сообщения от мастера.", function() {
+                        tg.close();
+                    });
+                } catch (e) {
+                    console.error(e);
+                    tg.MainButton.enable();
+                    tg.showAlert("Не удалось отправить заказ. Проверьте интернет-соединение и нажмите кнопку ещё раз.");
+                }
+            }
+        });
+
+        loadProducts();
+    </script>
+</body>
+</html>
